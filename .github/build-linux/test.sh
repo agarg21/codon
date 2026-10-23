@@ -38,7 +38,9 @@ fi
 # Run the suite as one gtest shard per CPU. Each shard runs in its own
 # directory that mirrors the workspace (symlinks) but has a private build/,
 # so tests that write fixed paths under build/ cannot collide.
-SHARDS=${CODON_TEST_SHARDS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu)}
+# Two shards: with one shard per CPU (4 on ubuntu-latest) the runner lost
+# communication mid-suite twice (memory/CPU starvation from parallel JIT tests).
+SHARDS=${CODON_TEST_SHARDS:-2}
 SHARD_ROOT="$(pwd)/build/shards"
 rm -rf "${SHARD_ROOT}"
 start=$(date +%s)
