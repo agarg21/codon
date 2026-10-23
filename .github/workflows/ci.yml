@@ -1,65 +1,18 @@
 name: Codon CI
 
+# FORK MEASUREMENT HARNESS (agarg21/ci-agent): dispatch only, linux-x86_64 leg only
 on:
-  push:
-    branches:
-      - master
-      - develop
-    tags:
-      - '*'
-  pull_request:
-    branches:
-      - develop
+  workflow_dispatch:
 
 jobs:
-  unicode_tables:
-    name: Verify Unicode Tables
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.14.3'
-      - name: Verify bundle and regeneration
-        run: |
-          python scripts/unicode/test_tables.py
-          python scripts/unicode_tables.py verify
-          python scripts/unicode_tables.py fetch --ucd-dir build/unicode-16.0.0
-          python scripts/unicode_tables.py regenerate --ucd-dir build/unicode-16.0.0 --output-dir build/unicode-check
-          python scripts/unicode_tables.py check --input-dir build/unicode-check
-
-  create_release:
-    name: GitHub Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    permissions:
-      contents: write
-    steps:
-      - name: Create Release
-        if: contains(github.ref, 'tags/v')
-        id: create_release
-        uses: ncipollo/release-action@v1
-
   build:
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             arch: linux-x86_64
-          - os: ubuntu-latest
-            arch: manylinux2014-x86_64
-          - os: ubuntu-24.04-arm
-            arch: linux-aarch64
-          - os: ubuntu-24.04-arm
-            arch: manylinux2014-aarch64
-          - os: macos-15-intel
-            arch: darwin-x86_64
-          - os: macos-14
-            arch: darwin-arm64
     runs-on: ${{ matrix.os }}
     name: Build Codon
-    needs: [create_release, unicode_tables]
     permissions:
       contents: write
       id-token: write
@@ -107,54 +60,3 @@ jobs:
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags') && matrix.arch == 'linux-x86_64'
         uses: pypa/gh-action-pypi-publish@release/v1
 
-  build_documentation:
-    name: Build Docs
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install properdocs \
-                                mkdocs-autorefs \
-                                mkdocs-macros-plugin \
-                                mkdocs-material \
-                                mkdocs-material-extensions \
-                                mkdocs-redirects
-          sudo apt-get update
-          sudo apt-get install -y pngquant
-
-      - name: Download Artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: codon-linux-x86_64.tar.gz
-          path: ./downloaded-artifact
-
-      - name: Build API reference
-        run: |
-          mv downloaded-artifact/* .
-          tar -xvzf codon-linux-x86_64.tar.gz
-          codon-deploy-linux-x86_64/bin/codon doc codon-deploy-linux-x86_64/lib/codon/stdlib > docs.json
-          python scripts/docgen.py docs.json docs/libraries/api $(pwd)/codon-deploy-linux-x86_64/lib/codon/stdlib
-
-      - name: Build MkDocs site
-        run: properdocs build --strict
-
-      - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/master'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          force_orphan: true
-          cname: docs.exaloop.io
