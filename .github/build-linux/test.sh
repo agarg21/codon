@@ -35,10 +35,12 @@ if [ "${ARCH}" = "darwin-x86_64" ]; then
   # :*python*:*core_arithmetic*:*stdlib_random_test*"
 fi
 
-# Run the suite as one gtest shard per CPU. Each shard runs in its own
+# Run the suite as gtest shards. Each shard runs in its own
 # directory that mirrors the workspace (symlinks) but has a private build/,
 # so tests that write fixed paths under build/ cannot collide.
-SHARDS=${CODON_TEST_SHARDS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu)}
+# Two shards: one shard per CPU (4 on ubuntu-latest) starved the 16 GB runner
+# (parallel JIT tests) and it lost communication mid-suite.
+SHARDS=${CODON_TEST_SHARDS:-2}
 SHARD_ROOT="$(pwd)/build/shards"
 rm -rf "${SHARD_ROOT}"
 start=$(date +%s)
